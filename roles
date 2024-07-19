@@ -1,0 +1,104 @@
+#!/usr/bin/python3
+
+# COMP3311 22T3 Assignment 2
+# Print a list of character roles played by an actor/actress
+
+import sys
+import psycopg2
+import helpers
+
+### Globals
+
+db = None
+usage = f"Usage: {sys.argv[0]} FullName"
+
+### Command-line args
+
+if len(sys.argv) < 2:
+   print(usage)
+   exit(1)
+
+# process the command-line args ...
+
+name = sys.argv[1]
+
+### Queries
+
+namesQuery = """
+SELECT name, id
+FROM People
+WHERE name = %s
+ORDER BY id
+"""
+
+query = """
+SELECT plr.ROLE, m.title, m.YEAR
+FROM Principals pr
+JOIN Movies m ON (pr.movie = m.id)
+JOIN People p ON (pr.person = p.id)
+JOIN PlaysRole plr ON (plr.inMovie = pr.id)
+WHERE p.name = %s and (pr.job = 'actor' or pr.job = 'actress' or pr.job = 'self')
+GROUP BY plr.ROLE, m.title, m.YEAR, p.id
+ORDER BY m.YEAR, m.title, plr.ROLE
+"""
+
+query2 = """
+SELECT plr.ROLE, m.title, m.YEAR
+FROM Principals pr
+JOIN Movies m ON (pr.movie = m.id)
+JOIN People p ON (pr.person = p.id)
+JOIN PlaysRole plr ON (plr.inMovie = pr.id)
+WHERE p.id = %s and (pr.job = 'actor' or pr.job = 'actress' or pr.job = 'self')
+GROUP BY p.id, plr.ROLE, m.title, m.YEAR
+ORDER BY p.id, m.YEAR, m.title, plr.ROLE
+"""
+
+### Manipulating database
+
+try:
+   # your code goes here
+    db = psycopg2.connect("dbname=ass2")
+    cur = db.cursor()
+    
+    cur.execute(namesQuery, [name])
+    names = cur.fetchall()
+    
+    if len(names) == 0:
+        print("No such person")
+        exit(0)
+        
+    cur.execute(query, [name])
+    roles = cur.fetchall()
+    
+    if len(roles) == 0:
+        print("No acting roles")
+        exit(0)
+    
+    if len(names) == 1:
+        for rl in roles:
+            print(str(rl[0]) + " in " + str(rl[1]) + " (" + str(rl[2]) + ")")
+    else:
+        for i in range(len(names)):
+            print(str(names[i][0]) + " #" + str(i+1))
+            
+            cur.execute(query2, [names[i][1]])
+            roles2 = cur.fetchall()
+            
+            if len(roles2) == 0:
+                print("No acting roles")
+            
+            for rl in roles2:
+                print(str(rl[0]) + " in " + str(rl[1]) + " (" + str(rl[2]) + ")")
+            
+
+    
+    
+    
+except Exception as err:
+   print("DB error: ", err)
+finally:
+   if db:
+      db.close()
+      
+
+

@@ -1,0 +1,135 @@
+#!/usr/bin/python3
+
+# COMP3311 22T3 Assignment 2
+# Print info about one movie; may need to choose
+
+import sys
+import psycopg2
+import helpers
+
+### Globals
+
+db = None
+usage = f"Usage: {sys.argv[0]} 'PartialMovieName'"
+
+### Command-line args
+
+if len(sys.argv) < 2:
+   print(usage)
+   exit(1)
+
+# process the command-line args ...
+
+partialName = sys.argv[1]
+
+### Queries
+
+moviesQuery = f"""
+SELECT id, title, YEAR
+FROM Movies
+WHERE title = '{partialName}'OR lower(title) ~ '{partialName}'
+ORDER BY title, YEAR
+"""
+
+roleQuery = """
+SELECT p.name, plr.ROLE
+FROM Principals pr
+JOIN Movies m ON (pr.movie = m.id)
+JOIN People p ON (pr.person = p.id)
+JOIN PlaysRole plr on (plr.inMovie = pr.id)
+where m.id = %s and (pr.job = 'actor' or pr.job = 'actress' or pr.job = 'self')
+GROUP BY plr.role, p.name, pr.id
+ORDER BY pr.ord
+"""
+
+principalQuery = """
+SELECT p.name, pr.job
+FROM Principals pr
+JOIN Movies m ON (pr.movie = m.id)
+JOIN People p ON (pr.person = p.id)
+where m.id = %s
+GROUP BY pr.job, p.name, pr.id
+ORDER BY pr.ord
+"""
+
+actorQuery = """
+SELECT p.name
+FROM Principals pr
+JOIN Movies m ON (pr.movie = m.id)
+JOIN People p ON (pr.person = p.id)
+where m.id = %s and (pr.job = 'actor' OR pr.job = 'actress' OR pr.job = 'self')
+GROUP BY p.name, pr.ord
+ORDER BY pr.ord
+"""
+
+### Manipulating database
+
+try:
+   # your code goes here
+    db = psycopg2.connect("dbname=ass2")
+    cur = db.cursor()
+    
+    cur.execute(moviesQuery, [partialName])
+    movies = cur.fetchall()
+    
+    if len(movies) == 0:
+        print("No movie matching: " + f"'{partialName}'")
+    
+    if len(movies) == 1:
+        for m in movies:
+            print(str(m[1]) + " (" + str(m[2]) + ")")
+        
+        movieId = m[0]
+        movieId = int(movieId)
+        cur.execute(roleQuery, [movieId])
+        roles = cur.fetchall()
+        cur.execute(principalQuery, [movieId])
+        principals = cur.fetchall()
+        cur.execute(actorQuery, [movieId])
+        actors = cur.fetchall()
+        
+        
+        for i in range(len(principals)):
+            if (str(principals[i][0]) not in str(roles)):
+                if (str(principals[i][1]) == 'actor' or str(principals[i][1]) == 'actress' or str(principals[i][1]) == 'self'):
+                    print(str(actors[i][0]) + " plays ???")
+                else:
+                    print(str(principals[i][0]) + ": " + str(principals[i][1]))
+            for j in range(len(roles)):
+                if (str(principals[i][0]) == str(roles[j][0])):
+                    print(str(principals[i][0]) + " plays " + str(roles[j][1]))
+        
+    if len(movies) > 1:
+        for i in range(len(movies)):
+            print(str(i+1) + ". " + str(movies[i][1]) + " (" + str(movies[i][2]) + ")")
+        
+        movieNum = input("Which movie? ")
+        movieNum = int(movieNum) - 1
+        print(str(movies[movieNum][1]) + " (" + str(movies[movieNum][2]) + ")")
+        
+        movieId = movies[movieNum][0]
+        movieId = int(movieId)
+        cur.execute(roleQuery, [movieId])
+        roles = cur.fetchall()
+        cur.execute(actorQuery, [movieId])
+        actors = cur.fetchall()
+        cur.execute(principalQuery, [movieId])
+        principals = cur.fetchall()       
+
+        for i in range(len(principals)):
+            if (str(principals[i][0]) not in str(roles)):
+                if (str(principals[i][1]) == 'actor' or str(principals[i][1]) == 'actress' or str(principals[i][1]) == 'self'):
+                    print(str(actors[i][0]) + " plays ???")
+                else:
+                    print(str(principals[i][0]) + ": " + str(principals[i][1]))
+            for j in range(len(roles)):
+                if (str(principals[i][0]) == str(roles[j][0])):
+                    print(str(principals[i][0]) + " plays " + str(roles[j][1]))
+    
+    
+except Exception as err:
+    print("DB error: ", err)
+finally:
+   if db:
+      db.close()
+
